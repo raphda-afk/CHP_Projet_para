@@ -14,9 +14,9 @@ void matrice_vecteur(int space_scheme, std::vector<double>& U, std::vector<doubl
 
     for (int k = iBeg ; k <= iEnd ; k++)
     {
-        int I = iBeg + k;
-        int j = I%Nx;
-        int i = I - Nx*j;
+        int I = k;
+        int i = I%Nx + 1;
+        int j = I/Nx + 1;
 
         double xi = xmin + i * dx;
         double yj = ymin + j * dy;
@@ -24,15 +24,13 @@ void matrice_vecteur(int space_scheme, std::vector<double>& U, std::vector<doubl
         double vx_ij = vx(cas, xi, yj, t);
         double vy_ij = vy(cas, xi, yj, t);
 
-        
-        int I_est = (j)*Nx + (i+1) % Nx - (iBeg - Nx);
-        int I_ouest = (j)*Nx + (i + (Nx-1))%Nx - (iBeg - Nx);
-        int I_nord = ((j+1)%Ny)*Nx + i - (iBeg - Nx);
-        int I_sud = ((j + (Ny-1))%Ny)*Nx + i - (iBeg - Nx);
+        int iloc = I - iBeg + Nx;
+        int I_est = (j-1)*Nx + (i%Nx) - iBeg + Nx;
+        int I_ouest = (j-1)*Nx + (i-1 + (Nx-1) )%Nx  - iBeg + Nx;
+        int I_nord = iloc + Nx;
+        int I_sud  = iloc - Nx;
 
         double dU_dx, dU_dy;
-
-
 
         if ( space_scheme == 1 )
         {
@@ -48,69 +46,70 @@ void matrice_vecteur(int space_scheme, std::vector<double>& U, std::vector<doubl
             
             if (vx_ij >= 0)
             {
-                dU_dx = -( dt / dx ) *( U[I] - U[I_ouest] );
+                dU_dx = -( dt / dx ) *( U[iloc] - U[I_ouest] );
             }
             else
             {
-                dU_dx = -( dt / dx ) * ( U[I_est] - U[I] );
+                dU_dx = -( dt / dx ) * ( U[I_est] - U[iloc] );
             }
 
             if (vy_ij >= 0)
             {
-                dU_dy = -( dt / dy ) * ( U[I] - U[I_sud] );
+                dU_dy = -( dt / dy ) * ( U[iloc] - U[I_sud] );
             }
             else
             {
-                dU_dy = -( dt / dy ) * ( U[I_nord] - U[I] );
+                dU_dy = -( dt / dy ) * ( U[I_nord] - U[iloc] );
             }
 
         }
-        result[I] = U[I] + vx_ij * dU_dx + vy_ij * dU_dy;
+        result[k-iBeg] = U[iloc] + vx_ij * dU_dx + vy_ij * dU_dy;
     }
 }
 
 
-void matrice_vecteur_imp(int space_scheme, std::vector<double>& U, std::vector<double>& result, int Nx, int Ny, double dx, double dy,double xmin, double ymin, double t, int cas, double dt)
+void matrice_vecteur_imp(int space_scheme, std::vector<double>& U, std::vector<double>& result, int Nx, int Ny, double dx, double dy,double xmin, double ymin, double t, int cas, double dt,int iBeg, int iEnd)
 {
-    for (int i = 1 ; i <= Nx ; i++)
+    for (int k = iBeg ; k <= iEnd ; k++)
     {
-        for (int j = 1 ; j <= Ny ; j++)
+        int I = k;
+        int i = I%Nx + 1;
+        int j = I/Nx + 1;
+
+        double xi = xmin + i * dx;
+        double yj = ymin + j * dy;
+
+        double vx_ij = vx(cas, xi, yj, t);
+        double vy_ij = vy(cas, xi, yj, t);
+
+        int iloc = I - iBeg + Nx;
+        int I_est = (j-1)*Nx + (i%Nx) - iBeg + Nx;
+        int I_ouest = (j-1)*Nx + (i-1 + (Nx-1) )%Nx  - iBeg + Nx;
+        int I_nord = iloc + Nx;
+        int I_sud  = iloc - Nx;
+        
+        double dU_dx, dU_dy;
+
+        if ( space_scheme == 1 )
         {
-            int I = (j-1)*Nx + i-1;
+            //cout << "Le schéma choisi est centré" << endl;
 
-            double xi = xmin + i * dx;
-            double yj = ymin + j * dy;
+            double cx = ( vx_ij * dt ) / ( 2.0 * dx );
+            double cy = ( vy_ij * dt ) / ( 2.0 * dy );
 
-            double vx_ij = vx(cas, xi, yj, t);
-            double vy_ij = vy(cas, xi, yj, t);
+            result[k-iBeg] = U[iloc] + cx*U[I_est] - cx*U[I_ouest] + cy*U[I_nord] - cy*U[I_sud];
 
-            int I_est = (j-1)*Nx + i % Nx;
-            int I_ouest = (j-1)*Nx + (i-1 + (Nx-1))%Nx;
-            int I_nord = (j%Ny)*Nx + i-1;
-            int I_sud = ((j-1 + (Ny-1))%Ny)*Nx + i-1;
+        }
+        if ( space_scheme == 2 )
+        {
+            //cout << "Le schéma choisi est l'upwind" << endl;
+
+            double cx = ( vx_ij * dt ) / ( dx );
+            double cy = ( vy_ij * dt ) / ( dy );
+            double a = 1.0 + cx + cy;
             
+            result[k-iBeg] = a*U[iloc] - cx*U[I_ouest] - cy*U[I_sud];
 
-            if ( space_scheme == 1 )
-            {
-                //cout << "Le schéma choisi est centré" << endl;
-
-                double cx = ( vx_ij * dt ) / ( 2.0 * dx );
-                double cy = ( vy_ij * dt ) / ( 2.0 * dy );
-
-                result[I] = U[I] + cx*U[I_est] - cx*U[I_ouest] + cy*U[I_nord] - cy*U[I_sud];
-
-            }
-            if ( space_scheme == 2 )
-            {
-                //cout << "Le schéma choisi est l'upwind" << endl;
-
-                double cx = ( vx_ij * dt ) / ( dx );
-                double cy = ( vy_ij * dt ) / ( dy );
-                double a = 1.0 + cx + cy;
-                
-                result[I] = a*U[I] - cx*U[I_ouest] - cy*U[I_sud];
-
-            }
         }
     }
 }    
